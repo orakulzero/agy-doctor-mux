@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agy-doctor-mux"
+version = "1.0.0"
+description = "Antigravity 2.0 Hook Multiplexer, Git Worktree Deadlock Doctor, MCP <64-Char Schema Shield, and Cross-Surface Config Synchronizer."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "orakulzero", email = "129319184+orakulzero@users.noreply.github.com" }
+]
+keywords = [
+    "antigravity",
+    "agy",
+    "claude-code",
+    "mcp",
+    "hooks",
+    "multiplexer",
+    "worktree",
+    "diagnostics"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: System :: Monitoring",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+agy-doctor-mux = "agy_doctor_mux.cli:main"
+agy-doctor-mux-mcp = "agy_doctor_mux.mcp_server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agy_doctor_mux*"]

@@ -497,7 +497,7 @@ def test_req005_benchmark_suite_four_sandboxes_pass() -> None:
 
     res = run_benchmark_suite()
     assert res["all_passed"] is True
-    assert len(res["sandboxes"]) == 4
+    assert len(res["sandboxes"]) >= 4
     expected_names = {
         "SB1_HookMux_LatencyAndCollisions",
         "SB2_WorktreeDeadlock_And_BigInt_Heal",
@@ -505,7 +505,7 @@ def test_req005_benchmark_suite_four_sandboxes_pass() -> None:
         "SB4_CrossSurface_Sync_And_PluginAudit",
     }
     actual_names = {sb["name"] for sb in res["sandboxes"]}
-    assert actual_names == expected_names
+    assert expected_names.issubset(actual_names)
     for sb in res["sandboxes"]:
         assert sb["passed"] is True
 
@@ -587,3 +587,337 @@ def test_req006_git_commit_authors_locked_to_orakulzero() -> None:
     assert not invalid, (
         f"Git commit authors do not match {EXPECTED_OSS_EMAIL}: {set(invalid)}"
     )
+
+
+# ============================================================================
+# REQ-007: Native Antigravity L2 Plugin Scaffolder & Validator (v1.1.0)
+# ============================================================================
+
+
+def test_req007_scaffold_native_plugin_creates_full_l2_bundle_and_oss_wiring(
+    tmp_path: Path,
+) -> None:
+    from agy_doctor_mux.plugin_builder import (
+        scaffold_native_plugin,
+        validate_native_plugin_bundle,
+    )
+
+    plugin_dir = tmp_path / "demo-plugin"
+    res = scaffold_native_plugin(
+        plugin_dir,
+        name="demo-plugin",
+        display_name="Demo Plugin",
+        description="Demo L2 native Antigravity plugin bundle",
+    )
+    assert res["name"] == "demo-plugin"
+
+    manifest_path = plugin_dir / "plugin.json"
+    assert manifest_path.is_file(), "Root plugin.json must exist"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    allowed_keys = {
+        "name",
+        "displayName",
+        "description",
+        "version",
+        "logo",
+        "suggestedPrompts",
+    }
+    assert set(manifest.keys()).issubset(allowed_keys)
+    assert manifest["name"] == "demo-plugin"
+    assert manifest["displayName"] == "Demo Plugin"
+
+    logo_path = plugin_dir / "assets" / "logo.svg"
+    assert logo_path.is_file(), "assets/logo.svg must exist"
+    logo_svg = logo_path.read_text(encoding="utf-8")
+    assert "<svg" in logo_svg and 'viewBox="0 0 128 128"' in logo_svg
+
+    mcp_path = plugin_dir / "mcp_config.json"
+    assert mcp_path.is_file(), "mcp_config.json must exist"
+    mcp_cfg = json.loads(mcp_path.read_text(encoding="utf-8"))
+    for srv_name, srv_body in mcp_cfg.get("mcpServers", {}).items():
+        assert srv_name.startswith("demo-plugin")
+        assert srv_body.get("timeout_ms") == 15000
+
+    assert (plugin_dir / "hooks.json").is_file()
+    assert (plugin_dir / "skills" / "demo-plugin" / "SKILL.md").is_file()
+    assert (plugin_dir / "agents" / "demo-plugin-agent.md").is_file()
+
+    rules_file = plugin_dir / "rules" / "AGENTS.md"
+    assert rules_file.is_file()
+    assert not rules_file.read_text(encoding="utf-8").lstrip().startswith("---")
+
+    assert (plugin_dir / "LICENSE").is_file()
+    assert (plugin_dir / ".gitignore").is_file()
+    assert (plugin_dir / ".github" / "workflows" / "ci.yml").is_file()
+    assert (plugin_dir / "README.md").is_file()
+
+    val = validate_native_plugin_bundle(plugin_dir, check_oss_gates=True)
+    assert val["valid"] is True, f"Expected valid plugin bundle, got: {val}"
+    assert val["oss_compliant"] is True
+    assert val["errors"] == []
+
+
+def test_req007_validate_native_plugin_rejects_discarded_fields_bad_logo_and_frontmatter(
+    tmp_path: Path,
+) -> None:
+    from agy_doctor_mux.plugin_builder import (
+        scaffold_native_plugin,
+        validate_native_plugin_bundle,
+    )
+
+    plugin_dir = tmp_path / "broken-plugin"
+    scaffold_native_plugin(plugin_dir, name="broken-plugin")
+
+    # Inject unsupported/discarded fields and remote URL logo into plugin.json
+    manifest_path = plugin_dir / "plugin.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["author"] = "unofficial"
+    manifest["homepage"] = "https://example.com"
+    manifest["workflows"] = ["legacy.md"]
+    manifest["logo"] = "https://example.com/logo.svg"
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+    # Inject unprefixed MCP server name
+    (plugin_dir / "mcp_config.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "unprefixed-srv": {"command": "node", "timeout_ms": 15000}
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    # Inject YAML frontmatter and dynamically constructed Cyrillic characters into rules/AGENTS.md
+    cyrillic_sample = chr(0x041F) + chr(0x0440) + chr(0x0438)
+    (plugin_dir / "rules" / "AGENTS.md").write_text(
+        f"---\ntitle: Invalid Frontmatter\n---\n# Rules {cyrillic_sample}\n",
+        encoding="utf-8",
+    )
+
+    val = validate_native_plugin_bundle(plugin_dir, check_oss_gates=True)
+    assert val["valid"] is False
+    assert val["oss_compliant"] is False
+    joined_errors = " | ".join(val["errors"]).lower()
+    assert "author" in joined_errors or "unsupported" in joined_errors or "discarded" in joined_errors
+    assert "logo" in joined_errors
+    assert "unprefixed-srv" in joined_errors or "prefix" in joined_errors
+    assert "frontmatter" in joined_errors or "---" in joined_errors
+    assert "cyrillic" in joined_errors
+
+
+def test_req007_validate_native_plugin_enforces_kebab_name_and_prompt_count(
+    tmp_path: Path,
+) -> None:
+    from agy_doctor_mux.plugin_builder import (
+        scaffold_native_plugin,
+        validate_native_plugin_bundle,
+    )
+
+    plugin_dir = tmp_path / "kebab-check"
+    scaffold_native_plugin(plugin_dir, name="kebab-check")
+
+    manifest_path = plugin_dir / "plugin.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["name"] = "Invalid_Camel_Name"
+    manifest["suggestedPrompts"] = ["p1", "p2", "p3", "p4"]
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+    val = validate_native_plugin_bundle(plugin_dir, check_oss_gates=True)
+    assert val["valid"] is False
+    assert len(val["errors"]) >= 2
+
+
+# ============================================================================
+# REQ-008: Antigravity Language Server Connect RPC Client (agy_doctor_mux.lsrpc)
+# ============================================================================
+
+
+def test_req008_lsrpc_get_all_plugins_extracts_dir_hash_and_strips_skill_bodies() -> None:
+    from agy_doctor_mux.lsrpc import AntigravityLSRPCClient
+
+    recorded_requests: list[tuple[str, str, dict, dict | None]] = []
+
+    def mock_transport(
+        method: str, url: str, headers: dict[str, str], body: dict | None
+    ) -> dict:
+        recorded_requests.append((method, url, headers, body))
+        return {
+            "plugins": [
+                {
+                    "name": "data-tools",
+                    "path": "/Users/dev/.gemini/config/plugins/-1870732469773246571",
+                    "disabled": False,
+                    "isGlobal": True,
+                    "skills": [
+                        {
+                            "name": "sql-runner",
+                            "content": "A" * 20480,
+                            "body": "B" * 20480,
+                        }
+                    ],
+                    "agents": [{"name": "sql-agent"}],
+                    "rules": [
+                        {
+                            "absolutePath": "/Users/dev/.gemini/config/plugins/-1870732469773246571/rules/AGENTS.md"
+                        }
+                    ],
+                    "hooks": {"hooks": {"PreToolUse": []}},
+                    "mcp": [{"name": "data-tools-mcp"}],
+                }
+            ]
+        }
+
+    client = AntigravityLSRPCClient(
+        address="localhost:5387",
+        csrf_token="csrf-secret-123",
+        transport=mock_transport,
+    )
+    plugins = client.list_installed_plugins()
+    assert len(recorded_requests) == 1
+    assert recorded_requests[0][1].endswith(
+        "/exa.language_server_pb.LanguageServerService/GetAllPlugins"
+    )
+    assert recorded_requests[0][2].get("x-codeium-csrf-token") == "csrf-secret-123"
+
+    assert len(plugins) == 1
+    item = plugins[0]
+    assert item["name"] == "data-tools"
+    assert item["dir"] == "-1870732469773246571"
+    assert item["disabled"] is False
+    assert item["isGlobal"] is True
+    assert item["skills"] == ["sql-runner"]
+    assert item["agents"] == ["sql-agent"]
+    assert item["hooks"] is True
+    assert item["mcp"] == ["data-tools-mcp"]
+    assert len(json.dumps(item)) < 1000, "20KB SKILL.md body must be stripped"
+
+
+def test_req008_lsrpc_toggle_and_safe_uninstall_builtin_and_disabled_guards() -> None:
+    import pytest
+    from agy_doctor_mux.lsrpc import AntigravityLSRPCClient
+
+    rpc_calls: list[tuple[str, dict | None]] = []
+
+    def mock_transport(
+        method: str, url: str, headers: dict[str, str], body: dict | None
+    ) -> dict:
+        rpc_calls.append((url, body))
+        return {"ok": True}
+
+    client = AntigravityLSRPCClient(
+        address="localhost:5387",
+        csrf_token="csrf-secret-123",
+        transport=mock_transport,
+    )
+
+    with pytest.raises(ValueError, match="Built-in plugins cannot be uninstalled"):
+        client.safe_uninstall_plugin(
+            "core-builtin", path="/Applications/Antigravity/builtin/plugins/core-builtin"
+        )
+
+    res = client.safe_uninstall_plugin(
+        "-1870732469773246571",
+        path="/Users/dev/.gemini/config/plugins/-1870732469773246571",
+        was_disabled=True,
+    )
+    assert res["uninstalled"] is True
+    assert res["pluginId"] == "-1870732469773246571"
+    assert res["re_enabled_before_delete"] is True
+
+    assert len(rpc_calls) == 2
+    assert rpc_calls[0][0].endswith("/JetboxWriteState")
+    assert rpc_calls[0][1] == {
+        "userConfig": {"plugins": {"-1870732469773246571": {"enabled": True}}}
+    }
+    assert rpc_calls[1][0].endswith("/DeletePlugin")
+    assert rpc_calls[1][1] == {"pluginId": "-1870732469773246571"}
+
+
+# ============================================================================
+# REQ-009: Turnkey Flagship L2 Native Plugins Installer & SB5 Benchmark
+# ============================================================================
+
+
+def test_req009_install_flagship_l2_plugins_creates_three_valid_bundles(
+    tmp_path: Path,
+) -> None:
+    from agy_doctor_mux.plugin_builder import (
+        install_flagship_plugins,
+        validate_native_plugin_bundle,
+    )
+
+    plugins_root = tmp_path / "plugins"
+    res = install_flagship_plugins(plugins_root)
+    expected = {"agy-doctor-mux", "iso9000-agentops", "git-oss-publisher"}
+    assert set(res["installed"]) == expected
+
+    for name in expected:
+        bundle_dir = plugins_root / name
+        val = validate_native_plugin_bundle(bundle_dir, check_oss_gates=True)
+        assert val["valid"] is True, f"Flagship plugin {name} failed validation: {val}"
+        assert val["oss_compliant"] is True
+
+
+def test_req009_cli_and_mcp_plugin_management_round_trip(tmp_path: Path) -> None:
+    from agy_doctor_mux.cli import run_cli
+    from agy_doctor_mux.mcp_server import handle_mcp_request
+
+    custom_dir = tmp_path / "custom-l2"
+    init_res = run_cli(
+        [
+            "init-plugin",
+            "--target-dir",
+            str(custom_dir),
+            "--name",
+            "custom-l2",
+        ]
+    )
+    assert init_res["name"] == "custom-l2"
+
+    val_res = run_cli(["validate-plugin", "--plugin-dir", str(custom_dir)])
+    assert val_res["valid"] is True
+    assert val_res["oss_compliant"] is True
+
+    flagship_dir = tmp_path / "flagship-plugins"
+    inst_res = run_cli(["install-plugins", "--plugins-root", str(flagship_dir)])
+    assert len(inst_res["installed"]) == 3
+
+    list_resp = handle_mcp_request(
+        {"jsonrpc": "2.0", "id": 50, "method": "tools/list", "params": {}},
+        workspace=tmp_path,
+    )
+    tool_names = {t["name"] for t in list_resp["result"]["tools"]}
+    assert "agy_manage_plugins" in tool_names
+
+    call_resp = handle_mcp_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 51,
+            "method": "tools/call",
+            "params": {
+                "name": "agy_manage_plugins",
+                "arguments": {
+                    "action": "validate",
+                    "plugin_dir": str(custom_dir),
+                },
+            },
+        },
+        workspace=tmp_path,
+    )
+    assert "result" in call_resp
+    assert call_resp["result"].get("isError", False) is False
+
+
+def test_req009_benchmark_suite_includes_sb5_native_plugin_and_lsrpc() -> None:
+    from agy_doctor_mux.benchmarks import run_benchmark_suite
+
+    res = run_benchmark_suite()
+    assert res["all_passed"] is True
+    assert len(res["sandboxes"]) == 5
+    names = {sb["name"] for sb in res["sandboxes"]}
+    assert "SB5_NativePluginScaffolder_And_LSRPC" in names
+    for sb in res["sandboxes"]:
+        assert sb["passed"] is True
+

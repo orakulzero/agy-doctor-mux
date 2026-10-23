@@ -1,4 +1,4 @@
-"""Unified CLI Entrypoint for agy-doctor-mux."""
+"""Unified CLI Entrypoint for agy-doctor-mux (v1.1.0)."""
 
 from __future__ import annotations
 
@@ -14,6 +14,11 @@ from agy_doctor_mux.mcp_doctor import audit_mcp_config
 from agy_doctor_mux.mcp_server import run_stdio_server
 from agy_doctor_mux.mux import create_default_golden_stack_mux
 from agy_doctor_mux.oss_audit import audit_git_repository
+from agy_doctor_mux.plugin_builder import (
+    install_flagship_plugins,
+    scaffold_native_plugin,
+    validate_native_plugin_bundle,
+)
 from agy_doctor_mux.sync import sync_surfaces
 from agy_doctor_mux.worktree_doctor import (
     diagnose_and_heal_worktrees,
@@ -77,6 +82,21 @@ def run_cli(argv: Sequence[str] | None = None) -> dict[str, Any]:
     # 8. mcp-serve
     sub.add_parser("mcp-serve")
 
+    # 9. init-plugin
+    p_init_plug = sub.add_parser("init-plugin")
+    p_init_plug.add_argument("--target-dir", required=True)
+    p_init_plug.add_argument("--name", required=True)
+    p_init_plug.add_argument("--display-name", default="")
+    p_init_plug.add_argument("--description", default="")
+
+    # 10. validate-plugin
+    p_val_plug = sub.add_parser("validate-plugin")
+    p_val_plug.add_argument("--plugin-dir", required=True)
+
+    # 11. install-plugins
+    p_inst_plug = sub.add_parser("install-plugins")
+    p_inst_plug.add_argument("--plugins-root", required=True)
+
     ns, _ = parser.parse_known_args(remaining)
     cmd = ns.subcommand
 
@@ -122,6 +142,20 @@ def run_cli(argv: Sequence[str] | None = None) -> dict[str, Any]:
     if cmd == "mcp-serve":
         run_stdio_server(workspace=ws)
         return {"status": "stopped"}
+
+    if cmd == "init-plugin":
+        return scaffold_native_plugin(
+            target_dir=Path(ns.target_dir),
+            name=str(ns.name),
+            display_name=str(ns.display_name),
+            description=str(ns.description),
+        )
+
+    if cmd == "validate-plugin":
+        return validate_native_plugin_bundle(Path(ns.plugin_dir), check_oss_gates=True)
+
+    if cmd == "install-plugins":
+        return install_flagship_plugins(Path(ns.plugins_root))
 
     raise ValueError(f"Unknown or missing subcommand: {cmd!r}")
 

@@ -1,4 +1,4 @@
-"""Stdio JSON-RPC 2.0 MCP Server for agy-doctor-mux."""
+"""Stdio JSON-RPC 2.0 MCP Server for agy-doctor-mux (v1.1.0)."""
 
 from __future__ import annotations
 
@@ -9,6 +9,11 @@ from typing import Any
 
 from agy_doctor_mux.mcp_doctor import audit_mcp_config
 from agy_doctor_mux.mux import measure_mux_speedup
+from agy_doctor_mux.plugin_builder import (
+    install_flagship_plugins,
+    scaffold_native_plugin,
+    validate_native_plugin_bundle,
+)
 from agy_doctor_mux.sync import sync_surfaces
 from agy_doctor_mux.worktree_doctor import (
     diagnose_and_heal_worktrees,
@@ -68,6 +73,22 @@ MCP_TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "name": "agy_manage_plugins",
+        "description": "Scaffold, validate, or install native Antigravity L2 plugin bundles with 5-gate OSS compliance.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["init", "validate", "install_flagship"],
+                },
+                "plugin_dir": {"type": "string"},
+                "name": {"type": "string"},
+            },
+            "required": ["action"],
+        },
+    },
 ]
 
 
@@ -89,7 +110,7 @@ def handle_mcp_request(
                 "capabilities": {"tools": {"listChanged": False}},
                 "serverInfo": {
                     "name": "agy-doctor-mux-mcp",
-                    "version": "1.0.0",
+                    "version": "1.1.0",
                 },
             },
         }
@@ -127,6 +148,16 @@ def handle_mcp_request(
             elif name == "agy_sync_surfaces":
                 glob_dir = Path(args.get("global_dir") or (ws / ".global_agy"))
                 out = sync_surfaces(workspace_dir=ws, global_dir=glob_dir)
+            elif name == "agy_manage_plugins":
+                action = str(args.get("action") or "validate")
+                p_dir = Path(args.get("plugin_dir") or ws)
+                if action == "init":
+                    p_name = str(args.get("name") or p_dir.name)
+                    out = scaffold_native_plugin(p_dir, name=p_name)
+                elif action == "install_flagship":
+                    out = install_flagship_plugins(p_dir)
+                else:
+                    out = validate_native_plugin_bundle(p_dir, check_oss_gates=True)
             else:
                 return {
                     "jsonrpc": "2.0",

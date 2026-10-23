@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 from agy_doctor_mux.benchmarks import run_benchmark_suite
 from agy_doctor_mux.cli import main, run_cli
@@ -17,6 +17,8 @@ from agy_doctor_mux.mux import (
 )
 from agy_doctor_mux.oss_audit import audit_git_repository
 from agy_doctor_mux.plugin_builder import (
+    heal_all_plugins,
+    heal_plugin_bundle,
     install_flagship_plugins,
     scaffold_native_plugin,
     validate_native_plugin_bundle,
@@ -37,6 +39,8 @@ __all__ = [
     "create_default_golden_stack_mux",
     "diagnose_and_heal_worktrees",
     "handle_mcp_request",
+    "heal_all_plugins",
+    "heal_plugin_bundle",
     "install_flagship_plugins",
     "main",
     "measure_mux_speedup",

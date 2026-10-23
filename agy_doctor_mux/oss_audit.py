@@ -45,10 +45,32 @@ def audit_git_repository(repo_path: Path | str) -> dict[str, Any]:
     repo = Path(repo_path).resolve()
     violations: list[str] = []
 
-    # Gate 1: Required OSS files & MIT License
-    for req_file in ("LICENSE", "README.md", "pyproject.toml", ".gitignore"):
+    ls_out = _git_out(repo, "ls-files")
+    tracked = [
+        line.strip().replace("\\", "/")
+        for line in ls_out.splitlines()
+        if line.strip()
+    ]
+
+    # Gate 1: Required OSS files, Project Manifest & MIT License
+    for req_file in ("LICENSE", "README.md", ".gitignore"):
         if not (repo / req_file).is_file():
             violations.append(f"Missing required OSS file: {req_file}")
+
+    manifest_candidates = (
+        "pyproject.toml",
+        "requirements.txt",
+        "package.json",
+        "Cargo.toml",
+        "go.mod",
+    )
+    has_manifest = any((repo / m).is_file() for m in manifest_candidates) or any(
+        Path(rel).name in manifest_candidates for rel in tracked
+    )
+    if not has_manifest:
+        violations.append(
+            f"Missing project manifest file (expected one of {manifest_candidates})"
+        )
 
     lic_file = repo / "LICENSE"
     if lic_file.is_file():
@@ -57,12 +79,6 @@ def audit_git_repository(repo_path: Path | str) -> dict[str, Any]:
             violations.append("LICENSE missing 'MIT License' header")
 
     # Gate 2: Tracked files scan (Zero Cyrillic, Zero Personal Paths, Clean Index)
-    ls_out = _git_out(repo, "ls-files")
-    tracked = [
-        line.strip().replace("\\", "/")
-        for line in ls_out.splitlines()
-        if line.strip()
-    ]
     for rel_path in tracked:
         if rel_path.startswith((".supergraph/", ".agents-learning/", ".monitor/")):
             violations.append(f"Ephemeral directory tracked in git index: {rel_path}")

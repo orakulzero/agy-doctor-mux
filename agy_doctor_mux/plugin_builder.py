@@ -1,4 +1,4 @@
-"""Native Antigravity L2 Plugin Bundle Scaffolder, Strict Manifest Validator, and Flagship Installer."""
+"""Native Antigravity L2 Plugin Bundle Scaffolder, Strict Manifest Validator, Healer, and Flagship Installer."""
 
 from __future__ import annotations
 
@@ -29,6 +29,14 @@ DISCARDED_OR_UNSUPPORTED_KEYS = {
     "homepage",
     "workflows",
     "sidecars",
+}
+VALID_HOOK_EVENTS = {
+    "PreToolUse",
+    "PostToolUse",
+    "Stop",
+    "PreInvocation",
+    "PostInvocation",
+    "UserPromptSubmit",
 }
 KEBAB_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 VALID_LOGO_EXTS = {".svg", ".png", ".jpg", ".jpeg", ".webp"}
@@ -81,6 +89,11 @@ build/
 
 def _title_from_kebab(name: str) -> str:
     return " ".join(part.capitalize() for part in name.split("-") if part)
+
+
+def _to_kebab(raw: str) -> str:
+    s = re.sub(r"[^a-zA-Z0-9]+", "-", raw.strip().lower()).strip("-")
+    return s or "plugin"
 
 
 def scaffold_native_plugin(
@@ -344,7 +357,22 @@ def validate_native_plugin_bundle(
                 "Field 'suggestedPrompts' must be a list of at most 3 non-empty strings."
             )
 
-    # 5. Check mcp_config.json (prefix + <64-char composite names + timeout_ms)
+    # 5. Check hooks.json (must have top-level "hooks" dict; custom wrapper keys drop plugin in LS!)
+    hooks_path = root / "hooks.json"
+    has_hooks = hooks_path.is_file()
+    if has_hooks:
+        try:
+            hooks_data = json.loads(hooks_path.read_text(encoding="utf-8"))
+            if not isinstance(hooks_data, dict) or not isinstance(
+                hooks_data.get("hooks"), dict
+            ):
+                errors.append(
+                    "hooks.json must contain a top-level 'hooks' object; custom wrapper keys cause Antigravity Language Server to drop the plugin."
+                )
+        except Exception as exc:
+            errors.append(f"Invalid hooks.json: {exc}")
+
+    # 6. Check mcp_config.json (prefix + <64-char composite names + timeout_ms)
     mcp_path = root / "mcp_config.json"
     has_mcp = mcp_path.is_file()
     if has_mcp:
@@ -362,7 +390,7 @@ def validate_native_plugin_bundle(
         except Exception as exc:
             errors.append(f"Invalid mcp_config.json: {exc}")
 
-    # 6. Check rules/AGENTS.md (must NOT start with YAML frontmatter '---')
+    # 7. Check rules/AGENTS.md (must NOT start with YAML frontmatter '---')
     rules_path = root / "rules" / "AGENTS.md"
     has_rules = rules_path.is_file()
     if has_rules:
@@ -372,7 +400,7 @@ def validate_native_plugin_bundle(
                 "rules/AGENTS.md must be plain markdown without YAML frontmatter ('---')."
             )
 
-    # 7. Check 5 OSS Release Gates across all plugin files
+    # 8. Check 5 OSS Release Gates across all plugin files
     if check_oss_gates:
         lic_file = root / "LICENSE"
         if not lic_file.is_file():
@@ -429,7 +457,7 @@ def validate_native_plugin_bundle(
             if (root / "agents").is_dir()
         ],
         "rules": has_rules,
-        "hooks": (root / "hooks.json").is_file(),
+        "hooks": has_hooks,
         "mcp": has_mcp,
     }
 
@@ -438,6 +466,150 @@ def validate_native_plugin_bundle(
         "oss_compliant": oss_compliant,
         "errors": errors,
         "components": components,
+    }
+
+
+def heal_plugin_bundle(plugin_dir: Path | str) -> dict[str, Any]:
+    """Repair malformed plugin.json, hooks.json, mcp_config.json, and rules/AGENTS.md in place."""
+    root = Path(plugin_dir).resolve()
+    actions: list[str] = []
+
+    manifest_path = root / "plugin.json"
+    if not manifest_path.is_file():
+        alt = root / ".antigravity-plugin" / "plugin.json"
+        if alt.is_file():
+            manifest_path = alt
+
+    plugin_name = _to_kebab(root.name)
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except Exception:
+            manifest = {}
+        orig_manifest = dict(manifest)
+
+        # Strip unsupported / silently discarded fields
+        cleaned: dict[str, Any] = {
+            k: v for k, v in manifest.items() if k in ALLOWED_MANIFEST_KEYS
+        }
+        raw_name = str(cleaned.get("name") or root.name)
+        plugin_name = raw_name if KEBAB_RE.match(raw_name) else _to_kebab(raw_name)
+        cleaned["name"] = plugin_name
+        cleaned.setdefault("displayName", _title_from_kebab(plugin_name))
+        cleaned.setdefault(
+            "description", f"Native Antigravity L2 plugin bundle for {cleaned['displayName']}."
+        )
+        cleaned.setdefault("version", "1.0.0")
+
+        logo_val = cleaned.get("logo")
+        needs_local_logo = (
+            not isinstance(logo_val, str)
+            or not logo_val.strip()
+            or logo_val.startswith(("http://", "https://", "/", "\\"))
+            or Path(logo_val).is_absolute()
+            or not (root / logo_val).is_file()
+        )
+        if needs_local_logo:
+            assets_dir = root / "assets"
+            assets_dir.mkdir(parents=True, exist_ok=True)
+            (assets_dir / "logo.svg").write_text(_LOGO_SVG_TEMPLATE, encoding="utf-8")
+            cleaned["logo"] = "assets/logo.svg"
+            actions.append("generated local assets/logo.svg and updated plugin.json logo path")
+
+        prompts = cleaned.get("suggestedPrompts")
+        if isinstance(prompts, list):
+            cleaned["suggestedPrompts"] = [
+                str(p).strip() for p in prompts if isinstance(p, str) and str(p).strip()
+            ][:3]
+
+        if cleaned != orig_manifest:
+            manifest_path.write_text(json.dumps(cleaned, indent=2), encoding="utf-8")
+            actions.append("sanitized plugin.json to official 7-field schema")
+
+    # Repair hooks.json (extract lifecycle event arrays into top-level {"hooks": ...})
+    hooks_path = root / "hooks.json"
+    if hooks_path.is_file():
+        try:
+            hooks_data = json.loads(hooks_path.read_text(encoding="utf-8"))
+            if isinstance(hooks_data, dict) and not isinstance(
+                hooks_data.get("hooks"), dict
+            ):
+                merged_events: dict[str, list[Any]] = {}
+                for k, v in hooks_data.items():
+                    if k in VALID_HOOK_EVENTS and isinstance(v, list):
+                        merged_events.setdefault(k, []).extend(v)
+                    elif isinstance(v, dict):
+                        for ek, ev in v.items():
+                            if ek in VALID_HOOK_EVENTS and isinstance(ev, list):
+                                merged_events.setdefault(ek, []).extend(ev)
+                healed_hooks = {"hooks": merged_events}
+                hooks_path.write_text(
+                    json.dumps(healed_hooks, indent=2), encoding="utf-8"
+                )
+                actions.append("rewrote hooks.json with top-level 'hooks' object")
+        except Exception:
+            pass
+
+    # Repair mcp_config.json (inject timeout_ms, sanitize names, prefix servers)
+    mcp_path = root / "mcp_config.json"
+    if mcp_path.is_file():
+        try:
+            mcp_data = json.loads(mcp_path.read_text(encoding="utf-8"))
+            fixed_res = audit_mcp_config(mcp_data, auto_fix=True)
+            fixed_cfg = fixed_res["config"]
+            servers = fixed_cfg.get("mcpServers") or {}
+            prefixed_servers: dict[str, Any] = {}
+            for srv_name, srv_body in servers.items():
+                s_str = str(srv_name)
+                if not s_str.startswith(plugin_name):
+                    s_str = f"{plugin_name}-{s_str}"
+                prefixed_servers[s_str] = srv_body
+            fixed_cfg["mcpServers"] = prefixed_servers
+            if fixed_cfg != mcp_data:
+                mcp_path.write_text(json.dumps(fixed_cfg, indent=2), encoding="utf-8")
+                actions.append("repaired mcp_config.json timeouts, tool names, and server prefixes")
+        except Exception:
+            pass
+
+    # Repair rules/AGENTS.md (strip YAML frontmatter)
+    rules_path = root / "rules" / "AGENTS.md"
+    if rules_path.is_file():
+        txt = rules_path.read_text(encoding="utf-8", errors="replace")
+        if txt.lstrip().startswith("---"):
+            parts = txt.lstrip().split("---", 2)
+            if len(parts) == 3:
+                rules_path.write_text(parts[2].lstrip(), encoding="utf-8")
+                actions.append("stripped YAML frontmatter from rules/AGENTS.md")
+
+    return {
+        "plugin_dir": str(root),
+        "healed": len(actions) > 0,
+        "actions": actions,
+    }
+
+
+def heal_all_plugins(plugins_root: Path | str) -> dict[str, Any]:
+    """Scan all plugin subdirectories in plugins_root and repair malformed bundles."""
+    root = Path(plugins_root).resolve()
+    results: list[dict[str, Any]] = []
+    healed_count = 0
+
+    if root.is_dir():
+        for sub in sorted(root.iterdir()):
+            if not sub.is_dir():
+                continue
+            if (sub / "plugin.json").is_file() or (
+                sub / ".antigravity-plugin" / "plugin.json"
+            ).is_file():
+                res = heal_plugin_bundle(sub)
+                results.append(res)
+                if res["healed"]:
+                    healed_count += 1
+
+    return {
+        "plugins_root": str(root),
+        "healed_count": healed_count,
+        "results": results,
     }
 
 
@@ -487,7 +659,7 @@ def install_flagship_plugins(plugins_root: Path | str) -> dict[str, Any]:
             name=name,
             display_name=disp,
             description=desc,
-            version="1.1.0",
+            version="1.1.1",
             include_mcp=True,
             include_hooks=True,
             include_oss_gates=True,

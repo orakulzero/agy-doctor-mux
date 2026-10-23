@@ -15,6 +15,7 @@ from agy_doctor_mux.mcp_server import run_stdio_server
 from agy_doctor_mux.mux import create_default_golden_stack_mux
 from agy_doctor_mux.oss_audit import audit_git_repository
 from agy_doctor_mux.plugin_builder import (
+    heal_all_plugins,
     install_flagship_plugins,
     scaffold_native_plugin,
     validate_native_plugin_bundle,
@@ -97,6 +98,10 @@ def run_cli(argv: Sequence[str] | None = None) -> dict[str, Any]:
     p_inst_plug = sub.add_parser("install-plugins")
     p_inst_plug.add_argument("--plugins-root", required=True)
 
+    # 12. heal-plugins
+    p_heal_plug = sub.add_parser("heal-plugins")
+    p_heal_plug.add_argument("--plugins-root", required=True)
+
     ns, _ = parser.parse_known_args(remaining)
     cmd = ns.subcommand
 
@@ -156,6 +161,9 @@ def run_cli(argv: Sequence[str] | None = None) -> dict[str, Any]:
 
     if cmd == "install-plugins":
         return install_flagship_plugins(Path(ns.plugins_root))
+
+    if cmd == "heal-plugins":
+        return heal_all_plugins(Path(ns.plugins_root))
 
     raise ValueError(f"Unknown or missing subcommand: {cmd!r}")
 

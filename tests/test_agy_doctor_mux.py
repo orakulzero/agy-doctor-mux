@@ -921,3 +921,209 @@ def test_req009_benchmark_suite_includes_sb5_native_plugin_and_lsrpc() -> None:
     for sb in res["sandboxes"]:
         assert sb["passed"] is True
 
+
+# ============================================================================
+# REQ-010: Live Stress-Test Regression Suite (BUG-STRESS-01..04, v1.1.1)
+# ============================================================================
+
+
+def test_req010_bug_stress_01_detect_and_heal_malformed_hooks_json_and_plugin_manifest(
+    tmp_path: Path,
+) -> None:
+    from agy_doctor_mux.plugin_builder import (
+        heal_all_plugins,
+        heal_plugin_bundle,
+        validate_native_plugin_bundle,
+    )
+
+    plugin_dir = tmp_path / "plugins" / "supergraph"
+    plugin_dir.mkdir(parents=True)
+
+    (plugin_dir / "plugin.json").write_text(
+        json.dumps(
+            {
+                "$schema": "https://example.com/schema.json",
+                "name": "supergraph",
+                "version": "2.3.0",
+                "description": "DAG guard",
+                "author": {"name": "Dev"},
+                "keywords": ["dag"],
+                "license": "Apache-2.0",
+                "logo": "https://www.gstatic.com/logo.svg",
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (plugin_dir / "hooks.json").write_text(
+        json.dumps(
+            {
+                "supergraph-dag-guard": {
+                    "enabled": True,
+                    "PreToolUse": [
+                        {
+                            "matcher": "*",
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": "python scripts/guard.py",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (plugin_dir / "mcp_config.json").write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "supergraph-mcp": {
+                        "serverUrl": "https://mcp.local",
+                        "tools": {"query_dag": {"eager": True}},
+                    }
+                }
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    pre_val = validate_native_plugin_bundle(plugin_dir, check_oss_gates=False)
+    assert pre_val["valid"] is False
+    assert any("hooks.json" in err for err in pre_val["errors"])
+
+    heal_res = heal_all_plugins(tmp_path / "plugins")
+    assert heal_res["healed_count"] == 1
+    assert callable(heal_plugin_bundle)
+
+    healed_hooks = json.loads((plugin_dir / "hooks.json").read_text(encoding="utf-8"))
+    assert "hooks" in healed_hooks
+    assert "PreToolUse" in healed_hooks["hooks"]
+
+    healed_manifest = json.loads(
+        (plugin_dir / "plugin.json").read_text(encoding="utf-8")
+    )
+    allowed_keys = {
+        "name",
+        "displayName",
+        "description",
+        "version",
+        "logo",
+        "suggestedPrompts",
+    }
+    assert set(healed_manifest.keys()).issubset(allowed_keys)
+    assert "assets/logo.svg" in healed_manifest["logo"]
+    assert (plugin_dir / "assets" / "logo.svg").is_file()
+
+    post_val = validate_native_plugin_bundle(plugin_dir, check_oss_gates=False)
+    assert post_val["valid"] is True, f"Expected healed bundle to be valid: {post_val}"
+
+
+def test_req010_bug_stress_02_lsrpc_extracts_nested_protobuf_agent_names() -> None:
+    from agy_doctor_mux.lsrpc import AntigravityLSRPCClient
+
+    def mock_transport(
+        method: str, url: str, headers: dict[str, str], body: dict | None
+    ) -> dict:
+        return {
+            "plugins": [
+                {
+                    "name": "agy-doctor-mux",
+                    "path": "/Users/dev/.gemini/config/plugins/agy-doctor-mux",
+                    "disabled": False,
+                    "isGlobal": True,
+                    "skills": [],
+                    "agents": [
+                        {
+                            "path": "file:///Users/dev/.gemini/config/plugins/agy-doctor-mux/agents/agy-doctor-mux-agent.md",
+                            "agent": {
+                                "name": "agy-doctor-mux-agent",
+                                "description": "Specialized autonomous agent",
+                            },
+                            "isGlobal": True,
+                        }
+                    ],
+                    "rules": [],
+                    "hooks": {},
+                    "mcp": [],
+                }
+            ]
+        }
+
+    client = AntigravityLSRPCClient(
+        address="localhost:5387",
+        csrf_token="csrf-123",
+        transport=mock_transport,
+    )
+    plugins = client.list_installed_plugins()
+    assert len(plugins) == 1
+    assert plugins[0]["agents"] == ["agy-doctor-mux-agent"]
+
+
+def test_req010_bug_stress_03_mcp_doctor_preserves_dict_shaped_tools_metadata() -> None:
+    from agy_doctor_mux.mcp_doctor import audit_mcp_config
+
+    overlong_key = "overlong_tool_" + "x" * 60
+    cfg = {
+        "mcpServers": {
+            "gemini-api-docs": {
+                "serverUrl": "https://gemini-api-docs-mcp.dev",
+                "tools": {
+                    "gemini_search_docs": {"eager": True},
+                    overlong_key: {"eager": False},
+                },
+            }
+        }
+    }
+    res = audit_mcp_config(cfg, auto_fix=True)
+    assert res["valid"] is True
+    fixed_tools = res["config"]["mcpServers"]["gemini-api-docs"]["tools"]
+    assert isinstance(fixed_tools, dict), (
+        f"Dict-shaped tools map must remain a dict, got {type(fixed_tools)}"
+    )
+    assert fixed_tools["gemini_search_docs"] == {"eager": True}
+    other_keys = [k for k in fixed_tools if k != "gemini_search_docs"]
+    assert len(other_keys) == 1
+    short_key = other_keys[0]
+    assert fixed_tools[short_key] == {"eager": False}
+    assert len(f"mcp_gemini-api-docs_{short_key}") <= 64
+
+
+def test_req010_bug_stress_04_oss_audit_accepts_requirements_txt_or_package_json_repos(
+    tmp_path: Path,
+) -> None:
+    from agy_doctor_mux.oss_audit import audit_git_repository
+
+    repo = tmp_path / "fullstack_repo"
+    repo.mkdir()
+    _git_output("init", cwd=repo)
+    _git_output("config", "user.name", "orakulzero", cwd=repo)
+    _git_output("config", "user.email", EXPECTED_OSS_EMAIL, cwd=repo)
+
+    (repo / "LICENSE").write_text(
+        "MIT License\n\nCopyright (c) 2026 orakulzero\n\nPermission is hereby granted, free of charge, to any person obtaining a copy.\n",
+        encoding="utf-8",
+    )
+    (repo / "README.md").write_text("# Fullstack Repo\n", encoding="utf-8")
+    (repo / ".gitignore").write_text(
+        ".supergraph/\n.agents-learning/\n.monitor/\n.agents/teamwork/\n.env\n*.db\n*.key\n",
+        encoding="utf-8",
+    )
+    ci_dir = repo / ".github" / "workflows"
+    ci_dir.mkdir(parents=True)
+    (ci_dir / "ci.yml").write_text("name: CI\n", encoding="utf-8")
+    (repo / "requirements.txt").write_text("fastapi>=0.110.0\n", encoding="utf-8")
+
+    _git_output("add", "-A", cwd=repo)
+    _git_output("commit", "-m", "feat: initial fullstack release", cwd=repo)
+
+    audit_res = audit_git_repository(repo)
+    assert audit_res["passed"] is True, (
+        f"Expected requirements.txt repo to pass OSS audit, got: {audit_res}"
+    )
+
+

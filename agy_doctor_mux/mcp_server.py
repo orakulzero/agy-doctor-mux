@@ -10,6 +10,7 @@ from typing import Any
 from agy_doctor_mux.mcp_doctor import audit_mcp_config
 from agy_doctor_mux.mux import measure_mux_speedup
 from agy_doctor_mux.plugin_builder import (
+    heal_all_plugins,
     install_flagship_plugins,
     scaffold_native_plugin,
     validate_native_plugin_bundle,
@@ -156,6 +157,8 @@ def handle_mcp_request(
                     out = scaffold_native_plugin(p_dir, name=p_name)
                 elif action == "install_flagship":
                     out = install_flagship_plugins(p_dir)
+                elif action == "heal_all":
+                    out = heal_all_plugins(p_dir)
                 else:
                     out = validate_native_plugin_bundle(p_dir, check_oss_gates=True)
             else:

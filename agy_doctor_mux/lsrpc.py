@@ -67,11 +67,17 @@ class AntigravityLSRPCClient:
                 for s in (p.get("skills") or [])
                 if isinstance(s, dict) and s.get("name")
             ]
-            agents = [
-                str(a.get("name", ""))
-                for a in (p.get("agents") or [])
-                if isinstance(a, dict) and a.get("name")
-            ]
+            agents: list[str] = []
+            for a in p.get("agents") or []:
+                if isinstance(a, dict):
+                    nested_agent = a.get("agent")
+                    a_name = a.get("name") or (
+                        nested_agent.get("name")
+                        if isinstance(nested_agent, dict)
+                        else None
+                    )
+                    if a_name:
+                        agents.append(str(a_name))
             rules = [
                 str(r.get("absolutePath", ""))
                 for r in (p.get("rules") or [])

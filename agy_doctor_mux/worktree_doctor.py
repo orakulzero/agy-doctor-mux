@@ -65,7 +65,7 @@ def diagnose_and_heal_worktrees(
             index_lock.unlink(missing_ok=True)
             actions_taken.append("removed stale .git/index.lock")
 
-    # 4. Check dangling .git/worktrees/* entries
+    # 4. Check dangling .git/worktrees/* entries and stale worktree locks
     worktrees_root = git_dir / "worktrees"
     if worktrees_root.is_dir():
         for wt_entry in sorted(worktrees_root.iterdir()):
@@ -84,6 +84,22 @@ def diagnose_and_heal_worktrees(
                 if not dry_run:
                     shutil.rmtree(wt_entry, ignore_errors=True)
                     actions_taken.append(f"pruned dangling worktree {wt_entry.name}")
+            else:
+                # Check for stale worktree locked file
+                locked_marker = wt_entry / "locked"
+                if locked_marker.is_file():
+                    issues.append(f"stale_worktree_locked:{wt_entry.name}")
+                    if not dry_run:
+                        locked_marker.unlink(missing_ok=True)
+                        actions_taken.append(f"removed stale worktree lock file {wt_entry.name}/locked")
+
+                # Check for any *.lock files inside worktree dir (e.g. index.lock, HEAD.lock)
+                for lock_f in sorted(wt_entry.glob("*.lock")):
+                    if lock_f.is_file():
+                        issues.append(f"stale_worktree_lock:{wt_entry.name}/{lock_f.name}")
+                        if not dry_run:
+                            lock_f.unlink(missing_ok=True)
+                            actions_taken.append(f"removed stale worktree lock file {wt_entry.name}/{lock_f.name}")
 
     if not dry_run and actions_taken:
         _git_cmd(repo, "worktree", "prune")

@@ -155,3 +155,20 @@ def audit_mcp_config(
         "alias_map": alias_map,
         "config": working_cfg,
     }
+
+
+def validate_mcp_config_strict(config: dict[str, Any]) -> tuple[bool, list[str]]:
+    """Strictly validate MCP configuration enforcing <=64-char names and timeout_ms > 0."""
+    res = audit_mcp_config(config, auto_fix=False)
+    violations = res.get("violations") or []
+    errors: list[str] = []
+    for v in violations:
+        v_type = v.get("type")
+        srv = v.get("server")
+        if v_type == "missing_timeout":
+            errors.append(f"Server '{srv}' is missing a positive integer 'timeout_ms'.")
+        elif v_type == "overlong_identifier":
+            errors.append(f"Identifier '{v.get('composite')}' exceeds 64 characters (length: {v.get('length')}).")
+        elif v_type == "invalid_characters":
+            errors.append(f"Identifier '{v.get('composite')}' contains invalid characters.")
+    return len(errors) == 0, errors

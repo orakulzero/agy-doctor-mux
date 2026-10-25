@@ -316,3 +316,183 @@ def reconcile_plugin_drift(
         "reconciled": len(updated) > 0,
         "updated_plugins": updated,
     }
+
+
+CORE_ECOSYSTEM_PACKAGES: tuple[str, ...] = (
+    "iso9000-agentops",
+    "agy-golden-stack",
+    "agy-brain-memory",
+    "agy-doctor-mux",
+    "agy-lsrpc-bridge",
+)
+
+
+def audit_ecosystem_version_matrix(
+    source_roots: Sequence[Path | str] | dict[str, Any] | None = None,
+    plugins_dir: Path | str | None = None,
+    target_version: str = "1.2.0",
+) -> dict[str, Any]:
+    """Audit version matrix across source packages and installed plugin manifests.
+
+    Compares package versions in pyproject.toml, __version__, and plugin.json
+    against target_version (default "1.2.0").
+    Default plugins_dir is Path.home() / ".gemini" / "config" / "plugins".
+    Ignores google-flow-video.
+
+    Returns:
+        target_version: str
+        synchronized: bool
+        packages: dict mapping package name to version & sync details
+        drifted: list of package names with version mismatch
+    """
+    is_custom_plugins = plugins_dir is not None
+    p_dir = Path(plugins_dir).resolve() if is_custom_plugins else (Path.home() / ".gemini" / "config" / "plugins")
+
+    installed_map: dict[str, dict[str, Any]] = {}
+    if p_dir.is_dir():
+        for child in sorted(p_dir.iterdir()):
+            if not child.is_dir():
+                continue
+            if child.name in ("google-flow-video", "flow_video_testbench"):
+                continue
+            manifest_file = child / "plugin.json"
+            if not manifest_file.is_file():
+                alt_manifest = child / ".antigravity-plugin" / "plugin.json"
+                if alt_manifest.is_file():
+                    manifest_file = alt_manifest
+                else:
+                    continue
+            try:
+                m_data = json.loads(manifest_file.read_text(encoding="utf-8"))
+                p_name = str(m_data.get("name") or child.name)
+                if p_name in ("google-flow-video", "flow_video_testbench"):
+                    continue
+                ver_val = m_data.get("version")
+                installed_map[p_name] = {
+                    "version": str(ver_val) if ver_val is not None else None,
+                    "path": str(manifest_file),
+                }
+            except Exception:
+                pass
+
+    source_map: dict[str, dict[str, Any]] = {}
+    if source_roots is None:
+        # Discover core packages dynamically using relative parent and home directories
+        repo_root = Path(__file__).resolve().parent.parent
+        search_candidates = [
+            repo_root.parent,
+            Path.home() / "teamwork_projects",
+            repo_root,
+            Path.cwd(),
+            Path.cwd().parent,
+        ]
+        raw_sources: dict[str, Path] = {}
+        for pkg in CORE_ECOSYSTEM_PACKAGES:
+            for base in search_candidates:
+                cand = base / pkg if base.name != pkg else base
+                if cand.is_dir() and (cand / "pyproject.toml").is_file():
+                    raw_sources[pkg] = cand
+                    break
+    elif isinstance(source_roots, dict):
+        raw_sources = source_roots
+    else:
+        raw_sources = {Path(p).name: Path(p) for p in source_roots}
+
+    for k, v in raw_sources.items():
+        if isinstance(v, (str, Path)) and (Path(v).is_dir() or Path(v).is_file()):
+            root = Path(v).resolve()
+            if root.is_file():
+                root = root.parent
+            pkg_name = k
+            pkg_ver: str | None = None
+
+            pyproj = root / "pyproject.toml"
+            if pyproj.is_file():
+                try:
+                    text = pyproj.read_text(encoding="utf-8")
+                    m_name = re.search(r'name\s*=\s*["\']([^"\']+)["\']', text)
+                    m_ver = re.search(r'version\s*=\s*["\']([^"\']+)["\']', text)
+                    if m_name:
+                        pkg_name = m_name.group(1)
+                    if m_ver:
+                        pkg_ver = m_ver.group(1)
+                except Exception:
+                    pass
+
+            if not pkg_ver:
+                for cand_pj in (root / "plugin.json", root / "plugins" / pkg_name / "plugin.json"):
+                    if cand_pj.is_file():
+                        try:
+                            pj_data = json.loads(cand_pj.read_text(encoding="utf-8"))
+                            pkg_name = str(pj_data.get("name") or pkg_name)
+                            pkg_ver = str(pj_data.get("version"))
+                            break
+                        except Exception:
+                            pass
+
+            if not pkg_ver:
+                for init_file in root.glob("**/__init__.py"):
+                    try:
+                        text = init_file.read_text(encoding="utf-8")
+                        m_ver = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', text)
+                        if m_ver:
+                            pkg_ver = m_ver.group(1)
+                            break
+                    except Exception:
+                        pass
+
+            source_map[pkg_name] = {
+                "version": pkg_ver,
+                "path": str(root),
+            }
+        elif isinstance(v, str):
+            source_map[k] = {
+                "version": v,
+                "path": None,
+            }
+
+    if source_roots is not None:
+        target_pkgs = set(source_map.keys())
+        if is_custom_plugins:
+            target_pkgs |= set(installed_map.keys())
+    else:
+        if is_custom_plugins:
+            target_pkgs = set(source_map.keys()) | set(installed_map.keys())
+        else:
+            target_pkgs = set(CORE_ECOSYSTEM_PACKAGES)
+
+    packages: dict[str, Any] = {}
+    drifted: list[str] = []
+
+    for pname in sorted(target_pkgs):
+        src_info = source_map.get(pname)
+        inst_info = installed_map.get(pname)
+
+        src_ver = src_info.get("version") if src_info else None
+        inst_ver = inst_info.get("version") if inst_info else None
+
+        has_drift = False
+        if src_info is not None and src_ver != target_version:
+            has_drift = True
+        if inst_info is not None and inst_ver != target_version:
+            has_drift = True
+        if src_info is None and inst_info is None:
+            has_drift = True
+
+        if has_drift:
+            drifted.append(pname)
+
+        packages[pname] = {
+            "source_version": src_ver,
+            "installed_version": inst_ver,
+            "source_path": src_info.get("path") if src_info else None,
+            "installed_path": inst_info.get("path") if inst_info else None,
+            "synchronized": not has_drift,
+        }
+
+    return {
+        "target_version": target_version,
+        "synchronized": len(drifted) == 0,
+        "packages": packages,
+        "drifted": drifted,
+    }

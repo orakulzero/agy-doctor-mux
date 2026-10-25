@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import os
 import re
+import socket
 from typing import Any
+from urllib.parse import urlsplit
 
 VALID_IDENTIFIER_RE = re.compile(r"^[a-zA-Z0-9_.\-:]+$")
 INVALID_CHAR_RE = re.compile(r"[^a-zA-Z0-9_.\-:]")
@@ -172,3 +175,111 @@ def validate_mcp_config_strict(config: dict[str, Any]) -> tuple[bool, list[str]]
         elif v_type == "invalid_characters":
             errors.append(f"Identifier '{v.get('composite')}' contains invalid characters.")
     return len(errors) == 0, errors
+
+
+def diagnose_and_heal_network_env(
+    env: dict[str, str] | None = None,
+    heal: bool = True,
+    probe_timeout_s: float = 0.2,
+) -> dict[str, Any]:
+    """Diagnose and heal unreachable loopback proxy environment variables.
+
+    Inspects HTTP_PROXY, HTTPS_PROXY, ALL_PROXY and lowercase equivalents.
+    If a variable points to a loopback address (127.0.0.1, localhost, ::1, 127.*)
+    and TCP connection fails or times out, marks it as dead. If heal=True,
+    removes the variable from the environment.
+
+    Non-loopback proxies are preserved regardless of connectivity.
+    """
+    if env is None:
+        target_env = os.environ
+    else:
+        target_env = env
+
+    stale_proxy_vars: list[str] = []
+    healed_vars: list[str] = []
+    probed_proxies: list[dict[str, Any]] = []
+
+    # Target proxy variables to inspect (both upper and lower variants)
+    target_keys: list[str] = []
+    for k in list(target_env.keys()):
+        if k.upper() in {"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"}:
+            target_keys.append(k)
+
+    for var_name in target_keys:
+        raw_val = target_env.get(var_name)
+        if not raw_val or not isinstance(raw_val, str) or not raw_val.strip():
+            continue
+        val_str = raw_val.strip()
+
+        # Parse host and port
+        try:
+            if "://" not in val_str:
+                parsed = urlsplit(f"http://{val_str}")
+            else:
+                parsed = urlsplit(val_str)
+            raw_host = (parsed.hostname or "").strip()
+            host_clean = raw_host.strip("[]").lower()
+            port = parsed.port
+            if port is None:
+                scheme = (parsed.scheme or "http").lower()
+                if scheme == "https":
+                    port = 443
+                elif scheme in ("socks5", "socks4"):
+                    port = 1080
+                else:
+                    port = 80
+        except Exception:
+            raw_host = ""
+            host_clean = ""
+            port = 80
+
+        is_loopback = False
+        if host_clean in ("127.0.0.1", "localhost", "::1") or host_clean.startswith("127."):
+            is_loopback = True
+
+        reachable: bool | None = None
+        error_msg: str | None = None
+        is_dead = False
+
+        if is_loopback:
+            try:
+                with socket.create_connection((host_clean, port), timeout=probe_timeout_s):
+                    reachable = True
+            except (OSError, TimeoutError) as exc:
+                reachable = False
+                error_msg = str(exc)
+                is_dead = True
+        else:
+            # Non-loopback proxies must NOT be removed even if connection test times out
+            is_dead = False
+            reachable = None
+
+        probe_info: dict[str, Any] = {
+            "variable": var_name,
+            "url": val_str,
+            "host": host_clean,
+            "port": port,
+            "is_loopback": is_loopback,
+            "reachable": reachable,
+            "dead": is_dead,
+        }
+        if error_msg:
+            probe_info["error"] = error_msg
+        probed_proxies.append(probe_info)
+
+        if is_dead:
+            stale_proxy_vars.append(var_name)
+            if heal:
+                target_env.pop(var_name, None)
+                healed_vars.append(var_name)
+
+    return {
+        "clean": len(stale_proxy_vars) == 0,
+        "stale_proxy_vars": stale_proxy_vars,
+        "healed_vars": healed_vars,
+        "probed_proxies": probed_proxies,
+        "sanitized_env": dict(target_env),
+        "healed": len(healed_vars) > 0,
+        "env_healed": len(healed_vars) > 0,
+    }

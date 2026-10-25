@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agy-doctor-mux"
-version = "1.1.1"
+version = "1.2.0"
 description = "Antigravity 2.0 Hook Multiplexer, Git Worktree Deadlock Doctor, MCP <64-Char Schema Shield, L2 Native Plugin Builder, and Language Server RPC Bridge."
 readme = "README.md"
 requires-python = ">=3.10"

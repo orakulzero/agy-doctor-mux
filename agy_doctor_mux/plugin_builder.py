@@ -659,7 +659,7 @@ def install_flagship_plugins(plugins_root: Path | str) -> dict[str, Any]:
             name=name,
             display_name=disp,
             description=desc,
-            version="1.1.1",
+            version="1.2.0",
             include_mcp=True,
             include_hooks=True,
             include_oss_gates=True,

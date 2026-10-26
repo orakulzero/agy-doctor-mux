@@ -330,12 +330,12 @@ CORE_ECOSYSTEM_PACKAGES: tuple[str, ...] = (
 def audit_ecosystem_version_matrix(
     source_roots: Sequence[Path | str] | dict[str, Any] | None = None,
     plugins_dir: Path | str | None = None,
-    target_version: str = "1.2.0",
+    target_version: str = "1.3.0",
 ) -> dict[str, Any]:
     """Audit version matrix across source packages and installed plugin manifests.
 
     Compares package versions in pyproject.toml, __version__, and plugin.json
-    against target_version (default "1.2.0").
+    against target_version (default "1.3.0").
     Default plugins_dir is Path.home() / ".gemini" / "config" / "plugins".
     Ignores google-flow-video.
 

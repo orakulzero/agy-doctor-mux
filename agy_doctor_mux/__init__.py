@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 from agy_doctor_mux.benchmarks import run_benchmark_suite
 from agy_doctor_mux.cli import main, run_cli
 from agy_doctor_mux.lsrpc import AntigravityLSRPCClient
 from agy_doctor_mux.mcp_doctor import (
     audit_mcp_config,
+    compact_mcp_schema_descriptions,
     diagnose_and_heal_network_env,
     validate_mcp_config_strict,
 )
@@ -47,6 +48,7 @@ __all__ = [
     "audit_ecosystem_version_matrix",
     "audit_git_repository",
     "audit_mcp_config",
+    "compact_mcp_schema_descriptions",
     "create_default_golden_stack_mux",
     "detect_plugin_drift",
     "diagnose_and_heal_network_env",

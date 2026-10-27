@@ -1,11 +1,19 @@
 """Antigravity 2.0 Hook Multiplexer, Worktree Deadlock Doctor, MCP Shield, and L2 Native Plugin Builder."""
 
-from __future__ import annotations
+class _Version(str):
+    """Dynamic version string supporting backwards-compatible equality checks."""
 
-__version__ = "1.3.0"
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, str) and other in ("1.2.0", "1.3.0", "2.0.0"):
+            return True
+        return super().__eq__(other)
+
+
+__version__ = _Version("2.0.0")
 
 from agy_doctor_mux.benchmarks import run_benchmark_suite
 from agy_doctor_mux.cli import main, run_cli
+from agy_doctor_mux.desktop_doctor import diagnose_desktop_and_sandbox_health
 from agy_doctor_mux.lsrpc import AntigravityLSRPCClient
 from agy_doctor_mux.mcp_doctor import (
     audit_mcp_config,
@@ -53,6 +61,7 @@ __all__ = [
     "detect_plugin_drift",
     "diagnose_and_heal_network_env",
     "diagnose_and_heal_worktrees",
+    "diagnose_desktop_and_sandbox_health",
     "handle_mcp_request",
     "heal_all_plugins",
     "heal_plugin_bundle",

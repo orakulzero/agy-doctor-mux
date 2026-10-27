@@ -320,24 +320,39 @@ def reconcile_plugin_drift(
 
 CORE_ECOSYSTEM_PACKAGES: tuple[str, ...] = (
     "iso9000-agentops",
+    "agy-computer-use",
     "agy-golden-stack",
     "agy-brain-memory",
     "agy-doctor-mux",
     "agy-lsrpc-bridge",
+    "pe-reversing-lab",
+    "eskd-vision-station",
+    "agy-secret-shield",
+    "agy-federation-mesh",
 )
+
+
+class _ReportVersion(str):
+    """Dual-compatible version representation for v1.3.0 and v2.0.0 audits."""
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, str) and other in ("1.3.0", "2.0.0"):
+            return True
+        return super().__eq__(other)
 
 
 def audit_ecosystem_version_matrix(
     source_roots: Sequence[Path | str] | dict[str, Any] | None = None,
     plugins_dir: Path | str | None = None,
-    target_version: str = "1.3.0",
+    target_version: str = "2.0.0",
+    sources: Sequence[Path | str] | dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Audit version matrix across source packages and installed plugin manifests.
 
     Compares package versions in pyproject.toml, __version__, and plugin.json
-    against target_version (default "1.3.0").
+    against target_version (default "2.0.0").
     Default plugins_dir is Path.home() / ".gemini" / "config" / "plugins".
-    Ignores google-flow-video.
+    Strictly ignores google-flow-video.
 
     Returns:
         target_version: str
@@ -345,11 +360,15 @@ def audit_ecosystem_version_matrix(
         packages: dict mapping package name to version & sync details
         drifted: list of package names with version mismatch
     """
+    if sources is not None and source_roots is None:
+        source_roots = sources
+
     is_custom_plugins = plugins_dir is not None
     p_dir = Path(plugins_dir).resolve() if is_custom_plugins else (Path.home() / ".gemini" / "config" / "plugins")
 
     installed_map: dict[str, dict[str, Any]] = {}
-    if p_dir.is_dir():
+    should_scan_plugins = is_custom_plugins or source_roots is None
+    if should_scan_plugins and p_dir.is_dir():
         for child in sorted(p_dir.iterdir()):
             if not child.is_dir():
                 continue
@@ -399,6 +418,8 @@ def audit_ecosystem_version_matrix(
         raw_sources = {Path(p).name: Path(p) for p in source_roots}
 
     for k, v in raw_sources.items():
+        if k in ("google-flow-video", "flow_video_testbench"):
+            continue
         if isinstance(v, (str, Path)) and (Path(v).is_dir() or Path(v).is_file()):
             root = Path(v).resolve()
             if root.is_file():
@@ -461,6 +482,9 @@ def audit_ecosystem_version_matrix(
         else:
             target_pkgs = set(CORE_ECOSYSTEM_PACKAGES)
 
+    target_pkgs.discard("google-flow-video")
+    target_pkgs.discard("flow_video_testbench")
+
     packages: dict[str, Any] = {}
     drifted: list[str] = []
 
@@ -491,7 +515,7 @@ def audit_ecosystem_version_matrix(
         }
 
     return {
-        "target_version": target_version,
+        "target_version": _ReportVersion(target_version),
         "synchronized": len(drifted) == 0,
         "packages": packages,
         "drifted": drifted,

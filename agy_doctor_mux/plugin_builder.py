@@ -149,8 +149,8 @@ def scaffold_native_plugin(
         mcp_cfg = {
             "mcpServers": {
                 f"{name}-mcp": {
-                    "command": "agy-doctor-mux-mcp",
-                    "args": [],
+                    "command": "python",
+                    "args": ["-W", "ignore::RuntimeWarning", "-m", "agy_doctor_mux.mcp_server"],
                     "timeout_ms": 15000,
                     "tools": [
                         "diagnose",
@@ -171,19 +171,19 @@ def scaffold_native_plugin(
                 "PreToolUse": [
                     {
                         "matcher": ".*",
-                        "command": "agy-doctor-mux mux-dispatch --event PreToolUse",
+                        "command": "python -W ignore::RuntimeWarning -m agy_doctor_mux.cli mux-dispatch --event PreToolUse",
                     }
                 ],
                 "PostToolUse": [
                     {
                         "matcher": ".*",
-                        "command": "agy-doctor-mux mux-dispatch --event PostToolUse",
+                        "command": "python -W ignore::RuntimeWarning -m agy_doctor_mux.cli mux-dispatch --event PostToolUse",
                     }
                 ],
                 "Stop": [
                     {
                         "matcher": ".*",
-                        "command": "agy-doctor-mux mux-dispatch --event Stop",
+                        "command": "python -W ignore::RuntimeWarning -m agy_doctor_mux.cli mux-dispatch --event Stop",
                     }
                 ],
             }

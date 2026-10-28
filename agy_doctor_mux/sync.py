@@ -68,19 +68,19 @@ def sync_surfaces(
             "PreToolUse": [
                 {
                     "matcher": ".*",
-                    "command": "agy-doctor-mux mux-dispatch --event PreToolUse",
+                    "command": "python -W ignore::RuntimeWarning -m agy_doctor_mux.cli mux-dispatch --event PreToolUse",
                 }
             ],
             "PostToolUse": [
                 {
                     "matcher": ".*",
-                    "command": "agy-doctor-mux mux-dispatch --event PostToolUse",
+                    "command": "python -W ignore::RuntimeWarning -m agy_doctor_mux.cli mux-dispatch --event PostToolUse",
                 }
             ],
             "Stop": [
                 {
                     "matcher": ".*",
-                    "command": "agy-doctor-mux mux-dispatch --event Stop",
+                    "command": "python -W ignore::RuntimeWarning -m agy_doctor_mux.cli mux-dispatch --event Stop",
                 }
             ],
         },
@@ -125,7 +125,7 @@ def sync_surfaces(
                         "hooks": [
                             {
                                 "type": "command",
-                                "command": "agy-doctor-mux mux-dispatch --event PreToolUse",
+                                "command": "python -W ignore::RuntimeWarning -m agy_doctor_mux.cli mux-dispatch --event PreToolUse",
                             }
                         ],
                     }
@@ -136,7 +136,7 @@ def sync_surfaces(
                         "hooks": [
                             {
                                 "type": "command",
-                                "command": "agy-doctor-mux mux-dispatch --event PostToolUse",
+                                "command": "python -W ignore::RuntimeWarning -m agy_doctor_mux.cli mux-dispatch --event PostToolUse",
                             }
                         ],
                     }
@@ -147,7 +147,7 @@ def sync_surfaces(
                         "hooks": [
                             {
                                 "type": "command",
-                                "command": "agy-doctor-mux mux-dispatch --event Stop",
+                                "command": "python -W ignore::RuntimeWarning -m agy_doctor_mux.cli mux-dispatch --event Stop",
                             }
                         ],
                     }

@@ -3,7 +3,6 @@
 __version__ = "2.0.0"
 
 from agy_doctor_mux.benchmarks import run_benchmark_suite
-from agy_doctor_mux.cli import main, run_cli
 from agy_doctor_mux.desktop_doctor import diagnose_desktop_and_sandbox_health
 from agy_doctor_mux.lsrpc import AntigravityLSRPCClient
 from agy_doctor_mux.mcp_doctor import (
@@ -12,7 +11,6 @@ from agy_doctor_mux.mcp_doctor import (
     diagnose_and_heal_network_env,
     validate_mcp_config_strict,
 )
-from agy_doctor_mux.mcp_server import handle_mcp_request, run_stdio_server
 from agy_doctor_mux.mux import (
     HookEntry,
     HookMultiplexer,
@@ -70,3 +68,19 @@ __all__ = [
     "validate_native_plugin_bundle",
     "validate_plugin_manifest",
 ]
+
+
+def __getattr__(name: str):
+    if name == 'main':
+        from agy_doctor_mux.cli import main
+        return main
+    if name == 'run_cli':
+        from agy_doctor_mux.cli import run_cli
+        return run_cli
+    if name == 'handle_mcp_request':
+        from agy_doctor_mux.mcp_server import handle_mcp_request
+        return handle_mcp_request
+    if name == 'run_stdio_server':
+        from agy_doctor_mux.mcp_server import run_stdio_server
+        return run_stdio_server
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

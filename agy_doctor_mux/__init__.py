@@ -1,15 +1,6 @@
 """Antigravity 2.0 Hook Multiplexer, Worktree Deadlock Doctor, MCP Shield, and L2 Native Plugin Builder."""
 
-class _Version(str):
-    """Dynamic version string supporting backwards-compatible equality checks."""
-
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, str) and other in ("1.2.0", "1.3.0", "2.0.0"):
-            return True
-        return super().__eq__(other)
-
-
-__version__ = _Version("2.0.0")
+__version__ = "2.0.0"
 
 from agy_doctor_mux.benchmarks import run_benchmark_suite
 from agy_doctor_mux.cli import main, run_cli

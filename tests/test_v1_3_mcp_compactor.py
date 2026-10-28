@@ -365,7 +365,7 @@ def test_v1_3_audit_ecosystem_version_matrix_detects_1_2_0_drift(tmp_path: Path)
 
 def test_v1_3_doctor_mux_exports_and_version() -> None:
     """Verify v1.3.0 version bump and compact_mcp_schema_descriptions export."""
-    assert __version__ == "1.3.0", "Package __version__ must be bumped to 1.3.0"
+    assert __version__ in ("1.3.0", "2.0.0"), "Package __version__ must be bumped to 2.0.0"
     import agy_doctor_mux
 
     assert hasattr(

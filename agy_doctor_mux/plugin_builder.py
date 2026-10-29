@@ -41,9 +41,21 @@ VALID_HOOK_EVENTS = {
 KEBAB_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 VALID_LOGO_EXTS = {".svg", ".png", ".jpg", ".jpeg", ".webp"}
 
-_LOGO_SVG_TEMPLATE = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
-  <rect x="14" y="14" width="100" height="100" rx="20" fill="#18181B" stroke="#38BDF8" stroke-width="4"/>
-  <path d="M38 64 L56 82 L90 46" fill="none" stroke="#38BDF8" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+_LOGO_SVG_TEMPLATE = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" fill="none">
+  <rect x="6" y="6" width="116" height="116" rx="26" fill="#0B1120" stroke="#38BDF8" stroke-width="2.8"/>
+  <rect x="12" y="12" width="104" height="104" rx="20" fill="#0F172A" stroke="#06B6D4" stroke-opacity="0.28" stroke-width="1.2"/>
+  <circle cx="64" cy="68" r="38" fill="#38BDF8" fill-opacity="0.09"/>
+  <path d="M20 68 H108 M64 34 V108" stroke="#94A3B8" stroke-opacity="0.12" stroke-width="1" stroke-dasharray="3 3"/>
+  <path d="M18 96 V108 H30 M98 108 H110 V96" stroke="#06B6D4" stroke-opacity="0.65" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="18" y="16" width="38" height="15" rx="4.5" fill="#1E293B" stroke="#38BDF8" stroke-width="1.5"/>
+  <text x="37" y="26.5" text-anchor="middle" fill="#38BDF8" font-family="monospace" font-size="8.5" font-weight="bold">P10</text>
+  <circle cx="104" cy="23.5" r="7" fill="#10B981" fill-opacity="0.25"/>
+  <circle cx="104" cy="23.5" r="3.8" fill="#10B981"/>
+  <rect x="26" y="44" width="76" height="50" rx="10" fill="#1E293B" stroke="#38BDF8" stroke-width="2.4"/>
+  <path d="M32 69 H46 L52 51 L60 87 L68 57 L74 75 L80 69 H96" stroke="#38BDF8" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="32" cy="69" r="3.5" fill="#38BDF8"/>
+  <circle cx="96" cy="69" r="3.5" fill="#10B981"/>
+  <path d="M58 35 H70 M64 29 V41" stroke="#10B981" stroke-width="3" stroke-linecap="round"/>
 </svg>
 """
 

@@ -1,0 +1,12 @@
+{
+  "name": "agy-doctor-mux",
+  "displayName": "Antigravity Runtime Doctor & Hook Mux",
+  "description": "Single-process hook multiplexer, Git worktree deadlock healer, and MCP <64-char schema shield.",
+  "version": "2.0.0",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Diagnose and heal workspace worktree deadlocks",
+    "Audit MCP server tool names and inject timeouts",
+    "Benchmark single-process hook multiplexer speedup"
+  ]
+}

@@ -4,6 +4,7 @@ __version__ = "2.0.0"
 
 from agy_doctor_mux.benchmarks import run_benchmark_suite
 from agy_doctor_mux.desktop_doctor import diagnose_desktop_and_sandbox_health
+from agy_doctor_mux.freeze_watchdog import FreezeWatchdog, WatchdogStatus
 from agy_doctor_mux.lsrpc import AntigravityLSRPCClient
 from agy_doctor_mux.mcp_doctor import (
     audit_mcp_config,
@@ -25,6 +26,7 @@ from agy_doctor_mux.plugin_builder import (
     scaffold_native_plugin,
     validate_native_plugin_bundle,
 )
+from agy_doctor_mux.subagent_folding import FoldingDecision, SubagentFoldingRouter
 from agy_doctor_mux.sync import (
     audit_ecosystem_version_matrix,
     detect_plugin_drift,
@@ -40,8 +42,12 @@ from agy_doctor_mux.worktree_doctor import (
 __all__ = [
     "__version__",
     "AntigravityLSRPCClient",
+    "FoldingDecision",
+    "FreezeWatchdog",
     "HookEntry",
     "HookMultiplexer",
+    "SubagentFoldingRouter",
+    "WatchdogStatus",
     "audit_ecosystem_version_matrix",
     "audit_git_repository",
     "audit_mcp_config",
@@ -71,16 +77,20 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    if name == 'main':
+    if name == "main":
         from agy_doctor_mux.cli import main
+
         return main
-    if name == 'run_cli':
+    if name == "run_cli":
         from agy_doctor_mux.cli import run_cli
+
         return run_cli
-    if name == 'handle_mcp_request':
+    if name == "handle_mcp_request":
         from agy_doctor_mux.mcp_server import handle_mcp_request
+
         return handle_mcp_request
-    if name == 'run_stdio_server':
+    if name == "run_stdio_server":
         from agy_doctor_mux.mcp_server import run_stdio_server
+
         return run_stdio_server
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

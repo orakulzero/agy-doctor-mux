@@ -8,7 +8,7 @@ import json
 import os
 import re
 import socket
-from typing import Any, Dict, List, Tuple
+from typing import Any
 from urllib.parse import urlsplit
 
 VALID_IDENTIFIER_RE = re.compile(r"^[a-zA-Z0-9_.\-:]+$")
@@ -192,20 +192,14 @@ def diagnose_and_heal_network_env(
 
     Non-loopback proxies are preserved regardless of connectivity.
     """
-    if env is None:
-        target_env = os.environ
-    else:
-        target_env = env
+    target_env = os.environ if env is None else env
 
     stale_proxy_vars: list[str] = []
     healed_vars: list[str] = []
     probed_proxies: list[dict[str, Any]] = []
 
     # Target proxy variables to inspect (both upper and lower variants)
-    target_keys: list[str] = []
-    for k in list(target_env.keys()):
-        if k.upper() in {"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"}:
-            target_keys.append(k)
+    target_keys = [k for k in list(target_env.keys()) if k.upper() in {"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"}]
 
     for var_name in target_keys:
         raw_val = target_env.get(var_name)
@@ -375,7 +369,7 @@ def _compact_text(text: str, is_property: bool = False) -> str:
 def _compact_schema_node(node: Any, is_property: bool = False) -> Any:
     """Recursively traverse schema dictionary and compact description values."""
     if isinstance(node, dict):
-        compacted_dict: Dict[str, Any] = {}
+        compacted_dict: dict[str, Any] = {}
         for key, val in node.items():
             if key == "description" and isinstance(val, str):
                 compacted_dict[key] = _compact_text(val, is_property=is_property)
@@ -400,8 +394,8 @@ def _compact_schema_node(node: Any, is_property: bool = False) -> Any:
 
 
 def compact_mcp_schema_descriptions(
-    schema: Dict[str, Any],
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    schema: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """Recursively compact verbose descriptions in an MCP schema.
 
     Preserves 100% of JSON Schema constraints (type, properties, required,
@@ -452,7 +446,7 @@ def compact_mcp_schema_descriptions(
     compacted_tokens = (compacted_chars + 3) // 4
     tokens_saved = max(0, original_tokens - compacted_tokens)
 
-    telemetry: Dict[str, Any] = {
+    telemetry: dict[str, Any] = {
         "original_chars": original_chars,
         "compacted_chars": compacted_chars,
         "reduction_pct": reduction_pct,
@@ -462,4 +456,3 @@ def compact_mcp_schema_descriptions(
     }
 
     return compacted, telemetry
-

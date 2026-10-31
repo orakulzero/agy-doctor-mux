@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import os
 from pathlib import Path
 import socket
 import sys
 import tempfile
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 def diagnose_desktop_and_sandbox_health(
@@ -169,11 +170,9 @@ def diagnose_desktop_and_sandbox_health(
         if wdir.is_dir():
             for pat in ("*.lock", "*.tmp", "_agy_*"):
                 for stale_file in wdir.glob(pat):
-                    try:
+                    with contextlib.suppress(Exception):
                         stale_file.unlink()
                         healed_items.append(str(stale_file))
-                    except Exception:
-                        pass
 
     is_healthy = bool(
         desktop_info["winsta0_accessible"]

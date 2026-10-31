@@ -29,19 +29,6 @@ class FoldingDecision:
     task_kind: str = "linear_query"
 
 
-def validate_folding_decision(decision: FoldingDecision) -> list[str]:
-    """Validates structural integrity and consistency of a folding decision."""
-    errors: list[str] = []
-    if decision.action not in ("fold_in_process", "spawn_subagent"):
-        errors.append(f"action must be 'fold_in_process' or 'spawn_subagent', got: {decision.action}")
-    
-    if decision.action == "fold_in_process":
-        if decision.estimated_saved_ms <= 0 or decision.estimated_saved_tokens <= 0:
-            errors.append("fold_in_process decisions should have positive savings")
-            
-    return errors
-
-
 class SubagentFoldingRouter:
     """@requirement("REQ-DOC-FOLD-01"): Evaluates tasks against the 4 keep-subagent criteria."""
 

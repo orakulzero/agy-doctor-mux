@@ -122,6 +122,23 @@ def create_default_golden_stack_mux(max_stop_continuations: int = 3) -> HookMult
     return mux
 
 
+def create_worktree_healer_hook(priority: int = 15) -> HookEntry:
+    """Create a PreToolUse hook entry that automatically heals git worktree locks (REQ-DM-LOCK-01)."""
+    from agy_doctor_mux.worktree_doctor import diagnose_and_heal_worktrees
+
+    def _handler(payload: dict[str, Any]) -> dict[str, Any]:
+        repo_path = payload.get("repo_path") or "."
+        report = diagnose_and_heal_worktrees(repo_path, dry_run=False)
+        return {"decision": "allow", "healer_report": report}
+
+    return HookEntry(
+        name="git_worktree_healer_shield",
+        event="PreToolUse",
+        priority=priority,
+        handler=_handler,
+    )
+
+
 def measure_mux_speedup(iterations: int = 5) -> dict[str, Any]:
     """Compare 5-hook in-process multiplexer latency against 5 sequential Python subprocess spawns."""
     n = max(1, int(iterations))

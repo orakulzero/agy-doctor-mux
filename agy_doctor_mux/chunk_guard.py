@@ -9,11 +9,11 @@ Hygiene: 100% English-only (0 Cyrillic characters).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 from agy_doctor_mux.mux import HookEntry
 
 
-def validate_write_chunk_limit(payload: str, max_lines: int = 180) -> Dict[str, Any]:
+def validate_write_chunk_limit(payload: str, max_lines: int = 180) -> dict[str, Any]:
     """Validate that payload line count does not exceed max_lines (REQ-DM-CHUNK-01)."""
     if not isinstance(payload, str):
         payload = str(payload)
@@ -34,18 +34,18 @@ def validate_write_chunk_limit(payload: str, max_lines: int = 180) -> Dict[str, 
     }
 
 
-def chunk_content_into_blocks(content: str, block_size: int = 180) -> List[str]:
+def chunk_content_into_blocks(content: str, block_size: int = 180) -> list[str]:
     """Split multi-line text into sequential blocks of up to block_size lines (REQ-DM-CHUNK-01)."""
     lines = content.splitlines(keepends=True)
     if not lines:
         return [""]
-    blocks: List[str] = []
+    blocks: list[str] = []
     for i in range(0, len(lines), block_size):
         blocks.append("".join(lines[i : i + block_size]))
     return blocks
 
 
-def pre_tool_write_guard(payload: Dict[str, Any], max_lines: int = 180) -> Dict[str, Any]:
+def pre_tool_write_guard(payload: dict[str, Any], max_lines: int = 180) -> dict[str, Any]:
     """Evaluate PreToolUse payload for write operations exceeding max_lines (REQ-DM-CHUNK-01)."""
     tool_name = str(payload.get("tool_name", "")).lower()
     tool_args = payload.get("tool_args", {})
@@ -77,7 +77,7 @@ def pre_tool_write_guard(payload: Dict[str, Any], max_lines: int = 180) -> Dict[
 def create_chunk_shield_hook(max_lines: int = 180, priority: int = 10) -> HookEntry:
     """Create a PreToolUse HookEntry registering the chunk shield (REQ-DM-CHUNK-01)."""
 
-    def _handler(payload: Dict[str, Any]) -> Dict[str, Any]:
+    def _handler(payload: dict[str, Any]) -> dict[str, Any]:
         return pre_tool_write_guard(payload, max_lines=max_lines)
 
     return HookEntry(
@@ -94,13 +94,13 @@ class SSEChunkShield:
     def __init__(self, max_lines: int = 180) -> None:
         self.max_lines = max_lines
 
-    def validate(self, content: str) -> Dict[str, Any]:
+    def validate(self, content: str) -> dict[str, Any]:
         return validate_write_chunk_limit(content, max_lines=self.max_lines)
 
-    def chunk(self, content: str) -> List[str]:
+    def chunk(self, content: str) -> list[str]:
         return chunk_content_into_blocks(content, block_size=self.max_lines)
 
-    def guard(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def guard(self, payload: dict[str, Any]) -> dict[str, Any]:
         return pre_tool_write_guard(payload, max_lines=self.max_lines)
 
     def create_hook(self, priority: int = 10) -> HookEntry:

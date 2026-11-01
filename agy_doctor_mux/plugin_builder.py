@@ -359,15 +359,14 @@ def validate_native_plugin_bundle(
 
     # 4. Check suggestedPrompts (max 3 non-empty strings)
     prompts = manifest.get("suggestedPrompts")
-    if prompts is not None:
-        if (
-            not isinstance(prompts, list)
-            or len(prompts) > 3
-            or any(not isinstance(p, str) or not p.strip() for p in prompts)
-        ):
-            errors.append(
-                "Field 'suggestedPrompts' must be a list of at most 3 non-empty strings."
-            )
+    if prompts is not None and (
+        not isinstance(prompts, list)
+        or len(prompts) > 3
+        or any(not isinstance(p, str) or not p.strip() for p in prompts)
+    ):
+        errors.append(
+            "Field 'suggestedPrompts' must be a list of at most 3 non-empty strings."
+        )
 
     # 5. Check hooks.json (must have top-level "hooks" dict; custom wrapper keys drop plugin in LS!)
     hooks_path = root / "hooks.json"
@@ -392,13 +391,12 @@ def validate_native_plugin_bundle(
             mcp_data = json.loads(mcp_path.read_text(encoding="utf-8"))
             mcp_audit = audit_mcp_config(mcp_data, auto_fix=False)
             if not mcp_audit["valid"]:
-                for v in mcp_audit["violations"]:
-                    errors.append(f"MCP config violation: {v}")
-            for srv_name in (mcp_data.get("mcpServers") or {}).keys():
-                if not str(srv_name).startswith(plugin_name_str):
-                    errors.append(
-                        f"MCP server '{srv_name}' must be prefixed with plugin name '{plugin_name_str}'."
-                    )
+                errors.extend(f"MCP config violation: {v}" for v in mcp_audit["violations"])
+            errors.extend(
+                f"MCP server '{srv_name}' must be prefixed with plugin name '{plugin_name_str}'."
+                for srv_name in (mcp_data.get("mcpServers") or {})
+                if not str(srv_name).startswith(plugin_name_str)
+            )
         except Exception as exc:
             errors.append(f"Invalid mcp_config.json: {exc}")
 

@@ -28,11 +28,11 @@ def validate_plugin_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(version, str) or not version.strip():
         errors.append("Field 'version' must be a non-empty semantic version string.")
 
-    for bad_key in sorted(UNSUPPORTED_MANIFEST_KEYS):
-        if bad_key in manifest:
-            errors.append(
-                f"Unsupported key {bad_key!r}: Agent Plugins 1.0 does not bundle workflows or sidecars."
-            )
+    errors.extend(
+        f"Unsupported key {bad_key!r}: Agent Plugins 1.0 does not bundle workflows or sidecars."
+        for bad_key in sorted(UNSUPPORTED_MANIFEST_KEYS)
+        if bad_key in manifest
+    )
 
     return {
         "valid": len(errors) == 0,
@@ -248,9 +248,10 @@ def detect_plugin_drift(
 
     untracked_in_source: list[str] = []
     if p_dir.is_dir():
-        for item in sorted(p_dir.iterdir()):
-            if item.is_dir() and item.name not in found_names:
-                untracked_in_source.append(item.name)
+        untracked_in_source.extend(
+            item.name for item in sorted(p_dir.iterdir())
+            if item.is_dir() and item.name not in found_names
+        )
 
     return {
         "drift_detected": len(drifted_plugins) > 0 or len(missing_in_plugins) > 0,

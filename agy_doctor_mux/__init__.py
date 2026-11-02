@@ -26,6 +26,10 @@ from agy_doctor_mux.plugin_builder import (
     scaffold_native_plugin,
     validate_native_plugin_bundle,
 )
+from agy_doctor_mux.preflight_ci_simulator import (
+    PreFlightCISimulator,
+    WorkflowStepResult,
+)
 from agy_doctor_mux.subagent_folding import FoldingDecision, SubagentFoldingRouter
 from agy_doctor_mux.sync import (
     audit_ecosystem_version_matrix,

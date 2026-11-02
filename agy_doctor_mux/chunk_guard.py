@@ -12,6 +12,9 @@ from __future__ import annotations
 from typing import Any, Dict, List
 from agy_doctor_mux.mux import HookEntry
 
+MAX_LINES_LIMIT = 180
+CHUNK_SHIELD_VERSION = '1.1.0'
+
 
 def validate_write_chunk_limit(payload: str, max_lines: int = 180) -> Dict[str, Any]:
     """Validate that payload line count does not exceed max_lines (REQ-DM-CHUNK-01)."""

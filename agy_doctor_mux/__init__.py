@@ -1,6 +1,7 @@
 """Antigravity 2.0 Hook Multiplexer, Worktree Deadlock Doctor, MCP Shield, and L2 Native Plugin Builder."""
 
 __version__ = "2.0.0"
+__v3_generation__ = "3.0.0"
 
 from agy_doctor_mux.benchmarks import run_benchmark_suite
 from agy_doctor_mux.desktop_doctor import diagnose_desktop_and_sandbox_health
@@ -30,6 +31,11 @@ from agy_doctor_mux.preflight_ci_simulator import (
     PreFlightCISimulator,
     WorkflowStepResult,
 )
+from agy_doctor_mux.shadow_checkpoint_refs import (
+    ShadowCheckpointManager,
+    create_shadow_checkpoint,
+    restore_shadow_checkpoint,
+)
 from agy_doctor_mux.subagent_folding import FoldingDecision, SubagentFoldingRouter
 from agy_doctor_mux.sync import (
     audit_ecosystem_version_matrix,
@@ -45,11 +51,13 @@ from agy_doctor_mux.worktree_doctor import (
 
 __all__ = [
     "__version__",
+    "__v3_generation__",
     "AntigravityLSRPCClient",
     "FoldingDecision",
     "FreezeWatchdog",
     "HookEntry",
     "HookMultiplexer",
+    "ShadowCheckpointManager",
     "SubagentFoldingRouter",
     "WatchdogStatus",
     "audit_ecosystem_version_matrix",
@@ -57,6 +65,7 @@ __all__ = [
     "audit_mcp_config",
     "compact_mcp_schema_descriptions",
     "create_default_golden_stack_mux",
+    "create_shadow_checkpoint",
     "detect_plugin_drift",
     "diagnose_and_heal_network_env",
     "diagnose_and_heal_worktrees",
@@ -68,6 +77,7 @@ __all__ = [
     "main",
     "measure_mux_speedup",
     "reconcile_plugin_drift",
+    "restore_shadow_checkpoint",
     "run_benchmark_suite",
     "run_cli",
     "run_stdio_server",
